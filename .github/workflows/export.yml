@@ -1,0 +1,54 @@
+name: Export PaddleOCR Model
+
+on:
+  workflow_dispatch: 
+  push:
+    branches:
+      - main
+
+jobs:
+  export-model:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install paddlepaddle
+          pip install -r requirements.txt
+
+      - name: Download PP-OCRv5_server_det
+        run: |
+          mkdir -p output/PP-OCRv5_server_det/
+          wget -O output/PP-OCRv5_server_det/best_accuracy.pdparams https://paddle-model-ecology.bj.bcebos.com/paddlex/official_pretrained_model/PP-OCRv5_server_det_pretrained.pdparams
+
+      - name: Export model
+        run: |
+          python3 tools/export_model.py \
+            -c configs/det/PP-OCRv5/PP-OCRv5_server_det.yml \
+            -o Global.pretrained_model=output/PP-OCRv5_server_det/best_accuracy.pdparams \
+               Global.save_inference_dir="./PP-OCRv5_server_det_infer/" \
+               Global.export_for_inference=True
+
+      - name: List exported files
+        run: |
+          echo "Exported files:"
+          ls -lh ./PP-OCRv5_server_det_infer/
+
+      - name: Package exported model
+        run: |
+          zip -r PP-OCRv5_server_det_infer.zip ./PP-OCRv5_server_det_infer/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PP-OCRv5-server-det-infer
+          path: PP-OCRv5_server_det_infer.zip
