@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install paddlepaddle==3.0.0
+          pip install paddleocr paddle2onnx
+
+      - name: Download PP-OCRv5_server_det
+        run: |
+          mkdir -p models/det
+          wget https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_server_det_infer.tar
+          tar -xvf PP-OCRv5_server_det_infer.tar -C models/det --strip-components=1
+
+      - name: Download PP-OCRv5_server_rec
+        run: |
+          mkdir -p models/rec
+          wget https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_server_rec_infer.tar
+          tar -xvf PP-OCRv5_server_rec_infer.tar -C models/rec --strip-components=1
+
+      - name: Convert det model to ONNX
+        run: |
+          paddle2onnx --model_dir models/det \
+                      --model_filename inference.json \
+                      --params_filename inference.pdiparams \
+                      --save_file models/det/det.onnx \
+                      --opset_version 11 \
+                      --enable_onnx_checker True
+
+      - name: Convert rec model to ONNX
+        run: |
+          paddle2onnx --model_dir models/rec \
+                      --model_filename inference.json \
+                      --params_filename inference.pdiparams \
+                      --save_file models/rec/rec.onnx \
+                      --opset_version 11 \
+                      --enable_onnx_checker True
+
+      - name: Upload ONNX models
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-models
+          path: models/**/*.onnx
+
+      - name: Upload binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: models/**/*.onnx
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
